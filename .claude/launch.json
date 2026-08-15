@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "launchpilot-dev",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["/Users/mittu/Documents/Imarticus/LaunchProduct/Build/scripts/dev.sh"],
+      "port": 5173
+    }
+  ]
+}
