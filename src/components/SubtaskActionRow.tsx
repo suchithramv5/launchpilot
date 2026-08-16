@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import type { Subtask } from '@/types';
-import { OWNERS } from '@/types';
+import type { Subtask, User } from '@/types';
 import { subtaskBadgeStyle, SUBTASK_STATUS_OPTIONS } from '@/lib/statusLabels';
 import { Badge } from '@/components/Badge';
 import { Select } from '@/components/ui';
@@ -9,6 +8,7 @@ export function SubtaskActionRow({
   subtask,
   parentTaskName,
   readOnly = false,
+  reassignOptions = [],
   onChangeStatus,
   onHold,
   onFlag,
@@ -17,10 +17,11 @@ export function SubtaskActionRow({
   subtask: Subtask;
   parentTaskName: string;
   readOnly?: boolean;
+  reassignOptions?: User[];
   onChangeStatus?: (status: Subtask['status']) => void;
   onHold?: () => void;
   onFlag?: () => void;
-  onReassign?: (newAssignee: string) => void;
+  onReassign?: (newAssigneeId: string, newAssigneeName: string) => void;
 }) {
   const [reassignValue, setReassignValue] = useState('');
 
@@ -31,7 +32,7 @@ export function SubtaskActionRow({
           <div className="text-[13.5px] font-semibold">{subtask.name}</div>
           <div className="text-[11.5px] text-ink-muted">
             for {parentTaskName}
-            {subtask.assignedBy && <span> · reassigned by {subtask.assignedBy}</span>}
+            {subtask.assignedByName && <span> · reassigned by {subtask.assignedByName}</span>}
           </div>
         </div>
         <Badge style={subtaskBadgeStyle(subtask.status)} size="sm" />
@@ -70,14 +71,15 @@ export function SubtaskActionRow({
               value={reassignValue}
               onChange={(e) => {
                 setReassignValue(e.target.value);
-                if (e.target.value) onReassign(e.target.value);
+                const person = reassignOptions.find((o) => o.id === e.target.value);
+                if (person) onReassign(person.id, person.name);
               }}
               className="py-1.5 text-[11.5px]"
             >
               <option value="">Reassign to…</option>
-              {OWNERS.filter((o) => o !== subtask.assignee).map((o) => (
-                <option key={o} value={o}>
-                  {o}
+              {reassignOptions.filter((o) => o.id !== subtask.assigneeId).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
                 </option>
               ))}
             </Select>

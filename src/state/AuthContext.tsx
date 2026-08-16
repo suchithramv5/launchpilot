@@ -1,48 +1,69 @@
-import { useCallback, useMemo } from 'react';
-import type { User } from '@/types';
+import { useCallback } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import * as mutations from '@/data/api/mutations';
 import { useAppData } from './AppDataContext';
 
-export interface LoginResult {
+export interface AuthResult {
   ok: boolean;
   error?: string;
 }
 
 export function useAuth() {
-  const { state, dispatch } = useAppData();
+  const { currentUser, authLoading, session, refetchProfiles, passwordRecovery, clearPasswordRecovery } = useAppData();
 
-  const currentUser: User | null = useMemo(
-    () => state.users.find((u) => u.id === state.currentUserId) ?? null,
-    [state.users, state.currentUserId],
-  );
+  const signUp = useCallback(async (email: string, password: string, name: string): Promise<AuthResult> => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !/^\S+@\S+\.\S+$/.test(trimmedEmail)) return { ok: false, error: 'Enter a valid email address.' };
+    if (password.length < 8) return { ok: false, error: 'Password must be at least 8 characters.' };
+    if (!name.trim()) return { ok: false, error: 'Enter your name.' };
 
-  const login = useCallback(
-    (email: string, password: string): LoginResult => {
-      const trimmed = email.trim().toLowerCase();
-      if (!trimmed || !password) return { ok: false, error: 'Enter your email and password.' };
-      if (!/^\S+@\S+\.\S+$/.test(trimmed)) return { ok: false, error: 'Enter a valid email address.' };
-      if (password.length < 8) return { ok: false, error: 'Password must be at least 8 characters.' };
-      const user = state.users.find((u) => u.email.toLowerCase() === trimmed);
-      if (!user) return { ok: false, error: 'No account found for that email.' };
-      if (user.status === 'revoked') return { ok: false, error: 'Access to LaunchPilot has been revoked for this account.' };
-      dispatch({ type: 'LOGIN', userId: user.id });
+    const { error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: { data: { name: name.trim() } },
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, []);
+
+  const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password) return { ok: false, error: 'Enter your email and password.' };
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) return { ok: false, error: 'Enter a valid email address.' };
+
+    const { error } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
+    if (error) return { ok: false, error: error.message };
+    await refetchProfiles();
+    return { ok: true };
+  }, [refetchProfiles]);
+
+  const requestReset = useCallback(async (email: string): Promise<AuthResult> => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) return { ok: false, error: 'Enter your email.' };
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) return { ok: false, error: 'Enter a valid email address.' };
+
+    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}update-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, { redirectTo });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, []);
+
+  const updatePassword = useCallback(
+    async (newPassword: string): Promise<AuthResult> => {
+      if (newPassword.length < 8) return { ok: false, error: 'Password must be at least 8 characters.' };
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) return { ok: false, error: error.message };
+      await mutations.clearMustChangePassword().catch(() => {});
+      clearPasswordRecovery();
+      await refetchProfiles();
       return { ok: true };
     },
-    [state.users, dispatch],
+    [clearPasswordRecovery, refetchProfiles],
   );
 
-  const requestReset = useCallback(
-    (email: string): LoginResult => {
-      const trimmed = email.trim().toLowerCase();
-      if (!trimmed) return { ok: false, error: 'Enter your email.' };
-      if (!/^\S+@\S+\.\S+$/.test(trimmed)) return { ok: false, error: 'Enter a valid email address.' };
-      const user = state.users.find((u) => u.email.toLowerCase() === trimmed);
-      if (!user) return { ok: false, error: 'No account found for that email.' };
-      return { ok: true };
-    },
-    [state.users],
-  );
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
 
-  const logout = useCallback(() => dispatch({ type: 'LOGOUT' }), [dispatch]);
-
-  return { currentUser, login, logout, requestReset };
+  return { currentUser, authLoading, hasSession: !!session, passwordRecovery, signUp, login, logout, requestReset, updatePassword };
 }

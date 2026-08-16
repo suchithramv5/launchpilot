@@ -16,10 +16,10 @@ export function MarketingDashboardPage() {
 
   if (!launch || !currentUser) return null;
 
-  const myTasks = launch.tasks.filter((t) => t.owner === 'Karan');
+  const myTasks = launch.tasks.filter((t) => t.ownerId === currentUser.id);
   const openCount = myTasks.filter((t) => t.status !== 'completed').length;
   // Upstream dependencies: any task marketing's own tasks depend on (single-dependency chain) plus anything blocking, still open.
-  const upstreamDeps = launch.tasks.filter((t) => t.owner !== 'Karan' && t.blocks && t.status !== 'completed');
+  const upstreamDeps = launch.tasks.filter((t) => t.ownerId !== currentUser.id && t.blocks && t.status !== 'completed');
   const blockerCount = upstreamDeps.filter((t) => t.status === 'at risk' || t.status === 'blocked').length;
   const listingTask = launch.tasks.find((t) => t.name === 'Listing live');
   const listingLabel = listingTask ? taskBadgeStyle(listingTask.status).label : '—';
@@ -29,7 +29,7 @@ export function MarketingDashboardPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="text-xl font-bold">{launch.name}</div>
-          <div className="text-[13px] text-ink-muted">Karan&apos;s marketing view · view only</div>
+          <div className="text-[13px] text-ink-muted">{currentUser.name}&apos;s marketing view · view only</div>
         </div>
         <div onClick={logout} className="cursor-pointer text-[13px] font-semibold text-ink-tertiary">
           log out
@@ -71,7 +71,7 @@ export function MarketingDashboardPage() {
           <div key={t.id} className="flex items-center gap-3 border-b border-border-divider px-4 py-3.5 last:border-b-0">
             <div className="flex-1">
               <div className="text-sm font-semibold">{t.name}</div>
-              <div className="mt-0.5 text-xs text-ink-muted">Owner: {t.owner}</div>
+              <div className="mt-0.5 text-xs text-ink-muted">Owner: {t.ownerName}</div>
             </div>
             <Badge style={taskBadgeStyle(t.status)} />
             <TaskTimingBadges task={t} launch={launch} />

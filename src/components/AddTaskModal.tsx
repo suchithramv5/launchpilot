@@ -1,29 +1,32 @@
 import { useState } from 'react';
-import type { Task } from '@/types';
-import { OWNERS } from '@/types';
+import type { Task, User } from '@/types';
 import { PrimaryButton, SecondaryButton, Select, TextInput } from '@/components/ui';
 
 export function AddTaskModal({
   tasks,
+  ownerOptions,
   onClose,
   onConfirm,
 }: {
   tasks: Task[];
+  ownerOptions: User[];
   onClose: () => void;
   onConfirm: (task: Omit<Task, 'id' | 'step'>, insertAfterTaskId: number | null) => void;
 }) {
   const [name, setName] = useState('');
   const [insertAfter, setInsertAfter] = useState<number | null>(tasks.length ? tasks[tasks.length - 1].id : null);
-  const [owner, setOwner] = useState(OWNERS[0]);
+  const [ownerId, setOwnerId] = useState(ownerOptions[0]?.id ?? '');
   const [durationDays, setDurationDays] = useState(3);
   const [blocks, setBlocks] = useState(true);
 
   function confirm() {
-    if (!name.trim()) return;
+    if (!name.trim() || !ownerId) return;
+    const owner = ownerOptions.find((o) => o.id === ownerId);
     onConfirm(
       {
         name: name.trim(),
-        owner,
+        ownerId,
+        ownerName: owner?.name ?? '',
         status: 'not_started',
         custom: true,
         blocks,
@@ -34,7 +37,8 @@ export function AddTaskModal({
         dependsOnTaskId: insertAfter,
         subtasks: [],
         reviewStatus: 'none',
-        reviewAssignee: '',
+        reviewAssigneeId: null,
+        reviewAssigneeName: '',
         reviewNote: '',
         startedAt: null,
         completedAt: null,
@@ -68,10 +72,10 @@ export function AddTaskModal({
         </Select>
 
         <div className="mb-1.5 text-xs font-semibold text-ink-secondary">Owner</div>
-        <Select value={owner} onChange={(e) => setOwner(e.target.value)} className="mb-4 w-full">
-          {OWNERS.map((o) => (
-            <option key={o} value={o}>
-              {o}
+        <Select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="mb-4 w-full">
+          {ownerOptions.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
             </option>
           ))}
         </Select>

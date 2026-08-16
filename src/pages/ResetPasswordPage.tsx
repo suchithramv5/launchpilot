@@ -10,8 +10,8 @@ export function ResetPasswordPage() {
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
 
-  function submit() {
-    const result = requestReset(email);
+  async function submit() {
+    const result = await requestReset(email);
     if (!result.ok) {
       setError(result.error ?? 'Something went wrong.');
       return;
@@ -32,7 +32,7 @@ export function ResetPasswordPage() {
       {sent ? (
         <>
           <div className="mb-4.5 rounded-control bg-status-ontrack-bg px-3.5 py-3.5 text-[13.5px] text-status-ontrack-text">
-            ✓ Reset instructions sent to {email} (demo — no email actually sent).
+            ✓ Reset instructions sent to {email}. Check your inbox for the link.
           </div>
           <SecondaryButton onClick={() => navigate('/login')} className="w-full text-center">
             Back to log in

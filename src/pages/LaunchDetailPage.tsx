@@ -77,6 +77,13 @@ export function LaunchDetailPage() {
         )}
         {isLead && (
           <HubLink
+            title="Launch readiness checklist →"
+            sub="Add, rename, reassign, or remove tasks on this launch's checklist"
+            onClick={() => navigate(`/launches/${launchId}/checklist`)}
+          />
+        )}
+        {isLead && (
+          <HubLink
             title="Team, leadership & stakeholders →"
             sub="View and edit team, leadership, external contacts, and who can view launch summary/retrospective"
             onClick={() => navigate(`/launches/${launchId}/roster`)}

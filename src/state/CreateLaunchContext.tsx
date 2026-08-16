@@ -1,15 +1,17 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { Launch, Task, TeamMember } from '@/types';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { Task, TeamMember } from '@/types';
 import { DEFAULT_CHECKLIST_TEMPLATE } from '@/data/checklistTemplate';
-import { useAddLaunch, useLaunches } from './LaunchDataContext';
+import { createLaunchWithTasksAndTeam, type DraftTaskInput } from '@/data/api/mutations';
+import { useAuth } from './AuthContext';
+import { useAppData } from './AppDataContext';
 
-function buildDefaultTasks(): Task[] {
+function buildDefaultTasks(ownerId: string, ownerName: string): Task[] {
   return DEFAULT_CHECKLIST_TEMPLATE.map((s, i) => ({
     id: i + 1,
     step: i + 1,
     name: s.name,
-    owner: s.owner,
+    ownerId,
+    ownerName,
     status: 'not_started',
     custom: false,
     blocks: s.blocks,
@@ -20,7 +22,8 @@ function buildDefaultTasks(): Task[] {
     dependsOnTaskId: i > 0 ? i : null,
     subtasks: [],
     reviewStatus: 'none' as const,
-    reviewAssignee: '',
+    reviewAssigneeId: null,
+    reviewAssigneeName: '',
     reviewNote: '',
     startedAt: null,
     completedAt: null,
@@ -43,16 +46,27 @@ interface CreateLaunchContextValue {
   updateTask: (taskId: number, patch: Partial<Task>) => void;
   deleteTask: (taskId: number) => void;
   setTeam: (team: TeamMember[]) => void;
-  createLaunch: () => number;
+  createLaunch: () => Promise<number>;
 }
 
 const CreateLaunchContext = createContext<CreateLaunchContextValue | null>(null);
 
 export function CreateLaunchProvider({ children }: { children: React.ReactNode }) {
-  const [draft, setDraft] = useState<DraftState>({ name: '', description: '', tasks: buildDefaultTasks(), team: [] });
-  const addLaunch = useAddLaunch();
-  const launches = useLaunches();
-  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const { refetchLaunches } = useAppData();
+  const [draft, setDraft] = useState<DraftState>({ name: '', description: '', tasks: [], team: [] });
+
+  // currentUser can still be loading (profiles fetch in flight) the instant this
+  // provider mounts, so seed the default checklist reactively rather than only
+  // at the useState initializer — but only once, so it never overwrites the
+  // user's own edits if they clear the checklist down to zero tasks later.
+  const seededDefaultTasks = useRef(false);
+  useEffect(() => {
+    if (currentUser && !seededDefaultTasks.current) {
+      seededDefaultTasks.current = true;
+      setDraft((d) => (d.tasks.length === 0 ? { ...d, tasks: buildDefaultTasks(currentUser.id, currentUser.name) } : d));
+    }
+  }, [currentUser]);
 
   const renumber = (tasks: Task[]): Task[] => tasks.map((t, i) => ({ ...t, step: i + 1 }));
 
@@ -80,31 +94,21 @@ export function CreateLaunchProvider({ children }: { children: React.ReactNode }
 
   const setTeam = useCallback((team: TeamMember[]) => setDraft((d) => ({ ...d, team })), []);
 
-  const createLaunch = useCallback((): number => {
-    const nextId = (launches.reduce((max, l) => Math.max(max, l.id), 0) || 0) + 1;
-    const launch: Launch = {
-      id: nextId,
-      name: draft.name.trim() || 'Untitled launch',
-      category: 'Beauty & personal care',
-      description: draft.description,
-      closed: false,
-      closedAt: null,
-      createdAt: Date.now(),
-      tasks: draft.tasks,
-      complianceFlags: [],
-      trailEntries: [],
-      team: draft.team,
-      retroTags: {},
-      retroSaved: false,
-      packetSubmitted: false,
-      bookingAdjusted: false,
-      bookingVendorName: '',
-      bookingReasonLabel: '',
-      bookingExtensionDays: null,
-    };
-    addLaunch(launch);
-    return nextId;
-  }, [addLaunch, draft, launches]);
+  const createLaunch = useCallback(async (): Promise<number> => {
+    const taskInputs: DraftTaskInput[] = draft.tasks.map((t) => ({
+      localId: t.id,
+      name: t.name,
+      ownerId: t.ownerId,
+      durationDays: t.durationDays,
+      blocks: t.blocks,
+      custom: t.custom,
+      dependsOnLocalId: t.dependsOnTaskId,
+      subtasks: t.subtasks.map((s) => ({ name: s.name, assigneeId: s.assigneeId })),
+    }));
+    const launchId = await createLaunchWithTasksAndTeam(draft.name, draft.description, taskInputs, draft.team, currentUser?.id ?? '');
+    await refetchLaunches();
+    return launchId;
+  }, [draft, currentUser, refetchLaunches]);
 
   const value = useMemo(
     () => ({ draft, setName, setDescription, setTasks, addTask, updateTask, deleteTask, setTeam, createLaunch }),

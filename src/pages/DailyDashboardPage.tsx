@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/state/AuthContext';
-import { useLaunch, useLaunchActions } from '@/state/LaunchDataContext';
+import { useLaunch, useLaunchActions, useLaunchRosterProfiles } from '@/state/LaunchDataContext';
 import { isLaunchOwnerUser } from '@/lib/permissions';
 import { blockedCount, computeNextMilestone, openComplianceFlagCount, taskCounts } from '@/lib/launchMetrics';
 import { taskBadgeStyle } from '@/lib/statusLabels';
@@ -31,6 +31,7 @@ export function DailyDashboardPage() {
   const launch = useLaunch(launchId);
   const { currentUser } = useAuth();
   const actions = useLaunchActions(launchId);
+  const ownerOptions = useLaunchRosterProfiles(launch);
   const navigate = useNavigate();
 
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
@@ -40,8 +41,7 @@ export function DailyDashboardPage() {
 
   const mySubtasks = useMemo(() => {
     if (!launch || !currentUser) return [];
-    const firstName = currentUser.name.split(' ')[0];
-    return launch.tasks.flatMap((t) => t.subtasks.filter((s) => s.assignee === firstName).map((s) => ({ task: t, subtask: s })));
+    return launch.tasks.flatMap((t) => t.subtasks.filter((s) => s.assigneeId === currentUser.id).map((s) => ({ task: t, subtask: s })));
   }, [launch, currentUser]);
 
   if (!launch || !currentUser) return null;
@@ -52,7 +52,7 @@ export function DailyDashboardPage() {
   const overallRisk = counts.blocked > 0 ? 'Blocked' : counts.at_risk > 0 ? 'At risk' : 'On track';
   const overallRiskStyle = counts.blocked > 0 ? taskBadgeStyle('blocked') : counts.at_risk > 0 ? taskBadgeStyle('at risk') : taskBadgeStyle('on track');
   const isLead = isLaunchOwnerUser(currentUser);
-  const myTasks = launch.tasks.filter((t) => t.owner === 'Priya');
+  const myTasks = launch.tasks.filter((t) => t.ownerId === currentUser.id);
 
   return (
     <div className="mx-auto w-full max-w-[1040px] p-8">
@@ -64,7 +64,7 @@ export function DailyDashboardPage() {
             </div>
           )}
           <div className="text-xl font-bold">{launch.name}</div>
-          <div className="text-[13px] text-ink-muted">Priya&apos;s daily dashboard · beauty &amp; personal care</div>
+          <div className="text-[13px] text-ink-muted">{currentUser.name}&apos;s daily dashboard · beauty &amp; personal care</div>
         </div>
         <div className="flex items-center gap-3">
           <Badge style={{ label: overallRisk, bg: overallRiskStyle.bg, text: overallRiskStyle.text }} />
@@ -121,7 +121,7 @@ export function DailyDashboardPage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex-1 text-sm font-semibold">{t.name}</div>
-                    <div className="w-[90px] text-xs text-ink-tertiary">{t.owner}</div>
+                    <div className="w-[90px] text-xs text-ink-tertiary">{t.ownerName}</div>
                     <Badge style={taskBadgeStyle(t.status)} />
                     <TaskTimingBadges task={t} launch={launch} showLock />
                     {isLead && (
@@ -159,7 +159,8 @@ export function DailyDashboardPage() {
                 onChangeStatus={(status) => actions.changeSubtaskStatus(task.id, subtask.id, status)}
                 onHold={() => actions.holdSubtask(task.id, subtask.id)}
                 onFlag={() => setFlagTarget({ taskId: task.id, subtaskId: subtask.id, name: subtask.name })}
-                onReassign={(newAssignee) => actions.reassignSubtask(task.id, subtask.id, newAssignee)}
+                onReassign={(newAssigneeId, newAssigneeName) => actions.reassignSubtask(task.id, subtask.id, newAssigneeId, newAssigneeName)}
+                reassignOptions={ownerOptions}
               />
             ))}
             {mySubtasks.length === 0 && <div className="px-4 py-3.5 text-[12.5px] text-ink-muted">No subtasks routed to you right now.</div>}
@@ -192,7 +193,14 @@ export function DailyDashboardPage() {
       </div>
 
       {openTaskId != null && <TaskDetailModal launchId={launchId} taskId={openTaskId} onClose={() => setOpenTaskId(null)} />}
-      {showAddTask && <AddTaskModal tasks={launch.tasks} onClose={() => setShowAddTask(false)} onConfirm={(task, insertAfter) => actions.addTask(task, insertAfter)} />}
+      {showAddTask && (
+        <AddTaskModal
+          tasks={launch.tasks}
+          ownerOptions={ownerOptions}
+          onClose={() => setShowAddTask(false)}
+          onConfirm={(task, insertAfter) => actions.addTask(task, insertAfter)}
+        />
+      )}
       {flagTarget && (
         <FlagConcernModal
           itemName={flagTarget.name}

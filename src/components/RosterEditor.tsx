@@ -39,7 +39,7 @@ export function RosterEditor({ team, onChange }: { team: TeamMember[]; onChange:
   }
 
   function addPerson() {
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     if (!name.trim() || !/^\S+@\S+\.\S+$/.test(trimmedEmail)) return;
     const member: TeamMember = { id: nextId(), name: name.trim(), email: trimmedEmail, title: title.trim(), group, role, permSummary, permRetro };
     onChange([...team, member]);

@@ -6,8 +6,8 @@ export function DetailsStep() {
   const { draft, setName, setDescription, createLaunch } = useCreateLaunch();
   const navigate = useNavigate();
 
-  function handleCreate() {
-    const id = createLaunch();
+  async function handleCreate() {
+    const id = await createLaunch();
     navigate(`/launches/${id}/confirm`);
   }
 

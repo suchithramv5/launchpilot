@@ -50,7 +50,7 @@ export function parseRosterFile(text: string): ParsedRosterRow[] {
     const { role, reassignedFrom } = mapRole(roleMatch?.[1] ?? '');
     rows.push({
       name: nameMatch[1].trim(),
-      email: emailMatch[1].trim(),
+      email: emailMatch[1].trim().toLowerCase(),
       role,
       reassignedFrom,
     });

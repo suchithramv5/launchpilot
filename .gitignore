@@ -7,3 +7,4 @@ v2_reference
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+.vercel

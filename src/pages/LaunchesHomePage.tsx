@@ -18,7 +18,7 @@ export function LaunchesHomePage() {
         <div>
           <div className="text-xl font-bold">Your launches</div>
           <div className="text-[13px] text-ink-muted">
-            {isOwner ? "Priya's parallel product launches · beauty & personal care" : "Launches you're part of · click one to open its details"}
+            {isOwner ? `${currentUser?.name ?? 'Your'}'s parallel product launches · beauty & personal care` : "Launches you're part of · click one to open its details"}
           </div>
         </div>
         {isOwner && <PrimaryButton onClick={() => navigate('/launches/new')}>+ New launch</PrimaryButton>}

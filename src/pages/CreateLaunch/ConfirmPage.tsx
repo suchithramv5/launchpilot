@@ -22,7 +22,7 @@ export function ConfirmPage() {
         <div className="flex-1 rounded-card border border-border-divider p-4 text-left">
           <div className="mb-1.5 text-[11px] font-semibold text-ink-muted">First milestone</div>
           <div className="text-sm font-bold">{first?.name ?? '—'}</div>
-          <div className="mt-0.5 text-xs text-ink-tertiary">Owner: {first?.owner ?? '—'}</div>
+          <div className="mt-0.5 text-xs text-ink-tertiary">Owner: {first?.ownerName ?? '—'}</div>
         </div>
         <div className="flex-1 rounded-card border border-border-divider p-4 text-left">
           <div className="mb-1.5 text-[11px] font-semibold text-ink-muted">Launch timeline</div>
