@@ -86,7 +86,12 @@ export function AdminUsersPage() {
             <div key={u.id} className={`flex items-center gap-2.5 border-b border-border-divider px-4 py-3 last:border-b-0 ${isRevoked ? 'opacity-50' : ''}`}>
               <Avatar initial={u.initial} size={28} accent={u.role === 'launch_lead'} />
               <div className="flex-[1.4]">
-                <div className="text-[13.5px] font-semibold">{u.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-[13.5px] font-semibold">{u.name}</div>
+                  {u.mustChangePassword && (
+                    <div className="rounded-full bg-status-risk-bg px-2 py-0.5 text-[10px] font-bold text-status-risk-text">Invite sent</div>
+                  )}
+                </div>
                 <div className="text-[11.5px] text-ink-muted">
                   {u.email} · {u.employeeId}
                 </div>
