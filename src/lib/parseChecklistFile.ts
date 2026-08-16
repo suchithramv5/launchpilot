@@ -1,29 +1,12 @@
-import { OWNERS } from '@/types';
-
 export interface ParsedSubtask {
   name: string;
   durationDays: number | null;
-  assignee: string;
 }
 
 export interface ParsedTask {
   name: string;
   durationDays: number | null;
-  owner: string;
   subtasks: ParsedSubtask[];
-}
-
-/**
- * Best-effort owner assignment by keyword, ported from the prototype's
- * `bestFallbackOwner` heuristic and narrowed to this build's 4 fixed
- * task-owner names (no legal/external roles in scope).
- */
-export function bestFallbackOwner(taskName: string): string {
-  const t = taskName.toLowerCase();
-  if (/complian|regulat|fda|legal/.test(t)) return 'Rohan';
-  if (/packag|manufactur|upstream|vendor|tooling|quality/.test(t)) return 'Ananya';
-  if (/market|social|influencer|campaign|creative|listing|retail/.test(t)) return 'Karan';
-  return 'Priya';
 }
 
 const TOP_LEVEL_RE = /^(\d+)\.\s+(.+?)(?:\s+[—–-]\s*(\d+)\s*days?)?\s*$/;
@@ -34,7 +17,9 @@ const SUB_ITEM_RE = /^\s*-\s+(.+?)(?:\s+[—–-]\s*(\d+)\s*days?)?\s*$/;
  * documented in sample-launch-checklist.txt / sample-launch-checklist-with-timelines.txt:
  *   N. Task name[ — X days]
  *      - Sub-item[ — X days]
- * Prose lines between items are ignored for structure.
+ * Prose lines between items are ignored for structure. Parsed tasks/subtasks
+ * default their owner/assignee to whoever creates the launch — real owners
+ * get picked from the roster afterward.
  */
 export function parseChecklistFile(text: string): ParsedTask[] {
   const lines = text.split(/\r?\n/);
@@ -49,11 +34,9 @@ export function parseChecklistFile(text: string): ParsedTask[] {
     const isIndented = /^\s{2,}/.test(line) || /^\s*-\s+/.test(line.trim());
 
     if (topMatch && !isIndented) {
-      const name = topMatch[2].trim();
       current = {
-        name,
+        name: topMatch[2].trim(),
         durationDays: topMatch[3] ? parseInt(topMatch[3], 10) : null,
-        owner: bestFallbackOwner(name),
         subtasks: [],
       };
       tasks.push(current);
@@ -62,11 +45,9 @@ export function parseChecklistFile(text: string): ParsedTask[] {
 
     const subMatch = SUB_ITEM_RE.exec(line.trim());
     if (subMatch && current) {
-      const name = subMatch[1].trim();
       current.subtasks.push({
-        name,
+        name: subMatch[1].trim(),
         durationDays: subMatch[2] ? parseInt(subMatch[2], 10) : null,
-        assignee: bestFallbackOwner(name),
       });
     }
     // other prose lines are ignored — they don't define structure
@@ -82,5 +63,3 @@ export function checklistParseError(text: string, parsed: ParsedTask[]): string 
   }
   return null;
 }
-
-export const CHECKLIST_OWNER_CHOICES = OWNERS;

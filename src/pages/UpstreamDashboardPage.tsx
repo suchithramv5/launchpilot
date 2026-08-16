@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/state/AuthContext';
-import { useLaunch, useLaunchActions } from '@/state/LaunchDataContext';
+import { useLaunch, useLaunchActions, useLaunchRosterProfiles } from '@/state/LaunchDataContext';
 import { isLaunchOwnerUser } from '@/lib/permissions';
 import { ROOT_CAUSES } from '@/types';
 import { taskBadgeStyle } from '@/lib/statusLabels';
@@ -24,6 +24,7 @@ export function UpstreamDashboardPage() {
   const launch = useLaunch(launchId);
   const { currentUser } = useAuth();
   const actions = useLaunchActions(launchId);
+  const ownerOptions = useLaunchRosterProfiles(launch);
 
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
   const [flagTarget, setFlagTarget] = useState<{ taskId: number; subtaskId: number; name: string } | null>(null);
@@ -33,13 +34,13 @@ export function UpstreamDashboardPage() {
   const [extensionDays, setExtensionDays] = useState(3);
 
   const mySubtasks = useMemo(() => {
-    if (!launch) return [];
-    return launch.tasks.flatMap((t) => t.subtasks.filter((s) => s.assignee === 'Ananya').map((s) => ({ task: t, subtask: s })));
-  }, [launch]);
+    if (!launch || !currentUser) return [];
+    return launch.tasks.flatMap((t) => t.subtasks.filter((s) => s.assigneeId === currentUser.id).map((s) => ({ task: t, subtask: s })));
+  }, [launch, currentUser]);
 
   if (!launch || !currentUser) return null;
 
-  const myTasks = launch.tasks.filter((t) => t.owner === 'Ananya');
+  const myTasks = launch.tasks.filter((t) => t.ownerId === currentUser.id);
   const openCount = myTasks.filter((t) => t.status !== 'completed').length;
   const vendorTasks = launch.tasks.filter((t) => t.name === 'Packaging tooling' || t.name === 'Manufacturing');
   const vendorLeadTimeDays = vendorTasks.reduce((sum, t) => sum + (t.durationDays || 0), 0);
@@ -68,7 +69,7 @@ export function UpstreamDashboardPage() {
   return (
     <div className="mx-auto w-full max-w-[1000px] p-8">
       <div className="mb-6 text-xl font-bold">{launch.name}</div>
-      <div className="-mt-4 mb-6 text-[13px] text-ink-muted">Ananya&apos;s upstream dashboard · update your task status</div>
+      <div className="-mt-4 mb-6 text-[13px] text-ink-muted">{currentUser.name}&apos;s upstream dashboard · update your task status</div>
 
       <EstimatedLaunchDateBanner launch={launch} />
 
@@ -110,7 +111,8 @@ export function UpstreamDashboardPage() {
             onChangeStatus={(status) => actions.changeSubtaskStatus(task.id, subtask.id, status)}
             onHold={() => actions.holdSubtask(task.id, subtask.id)}
             onFlag={() => setFlagTarget({ taskId: task.id, subtaskId: subtask.id, name: subtask.name })}
-            onReassign={(newAssignee) => actions.reassignSubtask(task.id, subtask.id, newAssignee)}
+            onReassign={(newAssigneeId, newAssigneeName) => actions.reassignSubtask(task.id, subtask.id, newAssigneeId, newAssigneeName)}
+            reassignOptions={ownerOptions}
           />
         ))}
         {mySubtasks.length === 0 && <div className="px-4 py-3.5 text-[12.5px] text-ink-muted">No subtasks routed to you right now.</div>}

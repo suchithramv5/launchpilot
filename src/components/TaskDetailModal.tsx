@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '@/state/AuthContext';
-import { useLaunch, useLaunchActions } from '@/state/LaunchDataContext';
+import { useLaunch, useLaunchActions, useLaunchRosterProfiles } from '@/state/LaunchDataContext';
 import { canEditTask } from '@/lib/permissions';
-import { OWNERS, ROOT_CAUSES, type Subtask } from '@/types';
+import { ROOT_CAUSES } from '@/types';
 import { subtaskBadgeStyle, TASK_STATUS_OPTIONS, badgeStatusLabel } from '@/lib/statusLabels';
 import { Badge } from '@/components/Badge';
 import { PrimaryButton, Select, TextArea, TextInput } from '@/components/ui';
@@ -11,9 +11,10 @@ export function TaskDetailModal({ launchId, taskId, onClose }: { launchId: numbe
   const launch = useLaunch(launchId);
   const { currentUser } = useAuth();
   const actions = useLaunchActions(launchId);
+  const ownerOptions = useLaunchRosterProfiles(launch);
   const [newSubtaskName, setNewSubtaskName] = useState('');
-  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState('');
-  const [complianceAssignee, setComplianceAssignee] = useState('Rohan');
+  const [newSubtaskAssigneeId, setNewSubtaskAssigneeId] = useState('');
+  const [complianceAssigneeId, setComplianceAssigneeId] = useState('');
   const [resendDrafts, setResendDrafts] = useState<Record<number, string>>({});
 
   const task = launch?.tasks.find((t) => t.id === taskId);
@@ -23,16 +24,21 @@ export function TaskDetailModal({ launchId, taskId, onClose }: { launchId: numbe
   const needsRiskReason = task.status === 'at risk' || task.status === 'blocked';
   const canComplete = canEdit && task.status !== 'completed' && task.subtasks.length > 0 && task.subtasks.every((s) => s.locked);
   const needsComplianceSend = canEdit && task.reviewStatus === 'none';
+  const complianceOptions = ownerOptions.filter((o) => o.role === 'compliance' || o.role === 'launch_lead' || o.role === 'admin');
 
   const taskTrail = launch.trailEntries.filter((e) => e.task === task.name).slice(0, 8);
 
   function addSubtask() {
-    if (!newSubtaskName.trim() || !newSubtaskAssignee) return;
-    const nextId = (task!.subtasks.reduce((max, s) => Math.max(max, s.id), 0) || 0) + 1;
-    const subtask: Subtask = { id: nextId, name: newSubtaskName.trim(), assignee: newSubtaskAssignee, status: 'open' };
-    actions.addSubtask(task!.id, subtask);
+    if (!newSubtaskName.trim() || !newSubtaskAssigneeId) return;
+    actions.addSubtask(task!.id, { name: newSubtaskName.trim(), assigneeId: newSubtaskAssigneeId });
     setNewSubtaskName('');
-    setNewSubtaskAssignee('');
+    setNewSubtaskAssigneeId('');
+  }
+
+  function sendToCompliance() {
+    const assignee = complianceOptions.find((o) => o.id === complianceAssigneeId) ?? complianceOptions[0];
+    if (!assignee) return;
+    actions.sendToCompliance(task!.id, assignee.id, assignee.name);
   }
 
   return (
@@ -65,10 +71,19 @@ export function TaskDetailModal({ launchId, taskId, onClose }: { launchId: numbe
           </div>
           <div className="flex-1">
             <div className="mb-1.5 text-[11px] font-semibold text-ink-secondary">Owner</div>
-            <Select value={task.owner} disabled={!canEdit} onChange={(e) => actions.changeTaskOwner(task.id, e.target.value)} className="w-full">
-              {OWNERS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
+            <Select
+              value={task.ownerId ?? ''}
+              disabled={!canEdit}
+              onChange={(e) => {
+                const owner = ownerOptions.find((o) => o.id === e.target.value);
+                if (owner) actions.changeTaskOwner(task.id, owner.id, owner.name);
+              }}
+              className="w-full"
+            >
+              {task.ownerId && !ownerOptions.some((o) => o.id === task.ownerId) && <option value={task.ownerId}>{task.ownerName}</option>}
+              {ownerOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
                 </option>
               ))}
             </Select>
@@ -122,14 +137,15 @@ export function TaskDetailModal({ launchId, taskId, onClose }: { launchId: numbe
           {needsComplianceSend && (
             <div className="mb-3 flex items-center gap-2 rounded-control border border-border-input bg-white p-2.5">
               <div className="flex-1 text-[12.5px] font-bold text-ink-secondary">Send to compliance for review</div>
-              <Select value={complianceAssignee} onChange={(e) => setComplianceAssignee(e.target.value)} className="py-1.5 text-xs">
-                {OWNERS.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
+              <Select value={complianceAssigneeId} onChange={(e) => setComplianceAssigneeId(e.target.value)} className="py-1.5 text-xs">
+                <option value="">Default ({complianceOptions[0]?.name ?? 'compliance'})</option>
+                {complianceOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
                   </option>
                 ))}
               </Select>
-              <PrimaryButton onClick={() => actions.sendToCompliance(task.id, complianceAssignee)} className="whitespace-nowrap px-3 py-1.5 text-xs">
+              <PrimaryButton onClick={sendToCompliance} className="whitespace-nowrap px-3 py-1.5 text-xs">
                 Send
               </PrimaryButton>
             </div>
@@ -146,7 +162,7 @@ export function TaskDetailModal({ launchId, taskId, onClose }: { launchId: numbe
             <div key={sub.id} className="border-t border-border-divider2 py-2">
               <div className="flex items-center gap-2">
                 <div className="flex-1 text-sm font-semibold">{sub.name}</div>
-                <div className="text-[11.5px] text-ink-tertiary">{sub.assignee}</div>
+                <div className="text-[11.5px] text-ink-tertiary">{sub.assigneeName}</div>
                 <Badge style={subtaskBadgeStyle(sub.status)} size="sm" />
               </div>
               {sub.flagDetail && (
@@ -195,11 +211,11 @@ export function TaskDetailModal({ launchId, taskId, onClose }: { launchId: numbe
               <div className="mb-1.5 text-[11px] font-semibold text-ink-muted">Add a custom subtask</div>
               <div className="flex gap-1.5">
                 <TextInput value={newSubtaskName} onChange={(e) => setNewSubtaskName(e.target.value)} placeholder="Subtask name" className="flex-[1.4] py-2 text-[12.5px]" />
-                <Select value={newSubtaskAssignee} onChange={(e) => setNewSubtaskAssignee(e.target.value)} className="flex-1 py-2 text-[12.5px]">
+                <Select value={newSubtaskAssigneeId} onChange={(e) => setNewSubtaskAssigneeId(e.target.value)} className="flex-1 py-2 text-[12.5px]">
                   <option value="">Assignee…</option>
-                  {OWNERS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
+                  {ownerOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
                     </option>
                   ))}
                 </Select>

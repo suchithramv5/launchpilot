@@ -4,6 +4,7 @@ import { RequireAuth } from '@/routes/RequireAuth';
 import { RequireRole } from '@/routes/RequireRole';
 import { LoginPage } from '@/pages/LoginPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
+import { UpdatePasswordPage } from '@/pages/UpdatePasswordPage';
 import { LaunchesHomePage } from '@/pages/LaunchesHomePage';
 import { AllLaunchesPage } from '@/pages/AllLaunchesPage';
 import { LaunchDetailPage } from '@/pages/LaunchDetailPage';
@@ -18,12 +19,14 @@ import { TrailPage } from '@/pages/TrailPage';
 import { RetroPage } from '@/pages/RetroPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
 import { RosterPage } from '@/pages/RosterPage';
+import { ChecklistEditorPage } from '@/pages/ChecklistEditorPage';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/update-password" element={<UpdatePasswordPage />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
@@ -48,6 +51,7 @@ export default function App() {
 
           <Route element={<RequireRole roles={['launch_lead', 'admin']} />}>
             <Route path="/launches/:id/roster" element={<RosterPage />} />
+            <Route path="/launches/:id/checklist" element={<ChecklistEditorPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
           </Route>
         </Route>

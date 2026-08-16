@@ -1,72 +1,189 @@
-import { useCallback, useMemo } from 'react';
-import type { Launch, Subtask, SubtaskStatus, Task, TaskStatus, TeamMember } from '@/types';
+import { useCallback, useEffect, useMemo } from 'react';
+import type { Launch, Subtask, SubtaskStatus, Task, TaskStatus, User } from '@/types';
+import * as mutations from '@/data/api/mutations';
 import { useAppData } from './AppDataContext';
 import { useAuth } from './AuthContext';
 
 export function useLaunches(): Launch[] {
-  const { state } = useAppData();
-  return state.launches;
+  const { launches } = useAppData();
+  return launches;
+}
+
+/**
+ * Real people eligible to be a task/subtask owner on this launch: everyone on
+ * its roster, plus every launch_lead/admin account (they have universal
+ * launch access regardless of roster membership).
+ */
+export function useLaunchRosterProfiles(launch: Launch | undefined): User[] {
+  const { profiles } = useAppData();
+  return useMemo(() => {
+    if (!launch) return [];
+    const emails = new Set(launch.team.map((t) => t.email.toLowerCase()));
+    const merged = new Map<string, User>();
+    for (const p of profiles) {
+      if (emails.has(p.email.toLowerCase()) || p.role === 'launch_lead' || p.role === 'admin') merged.set(p.id, p);
+    }
+    return Array.from(merged.values());
+  }, [launch, profiles]);
 }
 
 export function useLaunch(launchId: number | undefined): Launch | undefined {
-  const launches = useLaunches();
-  return useMemo(() => launches.find((l) => l.id === launchId), [launches, launchId]);
-}
+  const { currentLaunch, currentLaunchId, loadLaunch } = useAppData();
 
-export function useAddLaunch() {
-  const { dispatch } = useAppData();
-  return useCallback((launch: Launch) => dispatch({ type: 'ADD_LAUNCH', launch }), [dispatch]);
+  useEffect(() => {
+    if (launchId != null && launchId !== currentLaunchId) {
+      loadLaunch(launchId);
+    }
+  }, [launchId, currentLaunchId, loadLaunch]);
+
+  if (launchId == null || currentLaunchId !== launchId) return undefined;
+  return currentLaunch ?? undefined;
 }
 
 export function useLaunchActions(launchId: number) {
-  const { dispatch } = useAppData();
+  const { currentLaunch, refetchCurrentLaunch, refetchLaunches } = useAppData();
   const { currentUser } = useAuth();
-  const actingUserName = currentUser?.name ?? 'Someone';
+
+  const run = useCallback(
+    async (fn: () => Promise<void>) => {
+      await fn();
+      await Promise.all([refetchCurrentLaunch(), refetchLaunches()]);
+    },
+    [refetchCurrentLaunch, refetchLaunches],
+  );
+
+  const findTask = useCallback((taskId: number) => currentLaunch?.tasks.find((t) => t.id === taskId), [currentLaunch]);
+  const findSubtask = useCallback(
+    (taskId: number, subtaskId: number): Subtask | undefined => findTask(taskId)?.subtasks.find((s) => s.id === subtaskId),
+    [findTask],
+  );
 
   return useMemo(
     () => ({
-      updateDescription: (description: string) => dispatch({ type: 'UPDATE_LAUNCH_DESCRIPTION', launchId, description }),
-      closeLaunch: () => dispatch({ type: 'CLOSE_LAUNCH', launchId, actingUserName }),
+      updateDescription: (description: string) => run(() => mutations.updateLaunchDescription(launchId, description)),
+      closeLaunch: () => {
+        if (!currentUser || !currentLaunch) return Promise.resolve();
+        return run(() => mutations.closeLaunch(launchId, currentLaunch.name, currentUser));
+      },
 
-      changeTaskStatus: (taskId: number, status: TaskStatus) => dispatch({ type: 'CHANGE_TASK_STATUS', launchId, taskId, status, actingUserName }),
-      changeTaskOwner: (taskId: number, owner: string) => dispatch({ type: 'CHANGE_TASK_OWNER', launchId, taskId, owner, actingUserName }),
-      changeTaskDuration: (taskId: number, durationDays: number) => dispatch({ type: 'CHANGE_TASK_DURATION', launchId, taskId, durationDays, actingUserName }),
-      changeTaskRisk: (taskId: number, riskReason: string, riskComment: string) => dispatch({ type: 'CHANGE_TASK_RISK', launchId, taskId, riskReason, riskComment }),
-      addTask: (task: Omit<Task, 'id' | 'step'>, insertAfterTaskId: number | null) => dispatch({ type: 'ADD_TASK', launchId, task, insertAfterTaskId }),
-      deleteTask: (taskId: number) => dispatch({ type: 'DELETE_TASK', launchId, taskId }),
-      markTaskComplete: (taskId: number) => dispatch({ type: 'MARK_TASK_COMPLETE', launchId, taskId, actingUserName }),
-      sendToCompliance: (taskId: number, assignee: string) => dispatch({ type: 'SEND_TO_COMPLIANCE', launchId, taskId, assignee, actingUserName }),
-      acknowledgeComplianceReview: (taskId: number) => dispatch({ type: 'ACKNOWLEDGE_COMPLIANCE_REVIEW', launchId, taskId, actingUserName }),
-      replyComplianceReview: (taskId: number, note: string) => dispatch({ type: 'REPLY_COMPLIANCE_REVIEW', launchId, taskId, note, actingUserName }),
-      flagComplianceReview: (taskId: number, reason: string, detail: string) => dispatch({ type: 'FLAG_COMPLIANCE_REVIEW', launchId, taskId, reason, detail, actingUserName }),
+      changeTaskStatus: (taskId: number, status: TaskStatus) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.changeTaskStatus(launchId, task, status, currentUser));
+      },
+      changeTaskOwner: (taskId: number, ownerId: string, ownerName: string) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.changeTaskOwner(launchId, task, ownerId, ownerName, currentUser));
+      },
+      renameTask: (taskId: number, name: string) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.renameTask(launchId, task, name, currentUser));
+      },
+      changeTaskDuration: (taskId: number, durationDays: number) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.changeTaskDuration(launchId, task, durationDays, currentUser));
+      },
+      changeTaskRisk: (taskId: number, riskReason: string, riskComment: string) => run(() => mutations.changeTaskRisk(taskId, riskReason, riskComment)),
+      addTask: (task: Omit<Task, 'id' | 'step'>, insertAfterTaskId: number | null) =>
+        run(() =>
+          mutations.addTask(
+            launchId,
+            currentLaunch?.tasks ?? [],
+            { name: task.name, ownerId: task.ownerId, status: task.status, custom: task.custom, blocks: task.blocks, durationDays: task.durationDays },
+            insertAfterTaskId,
+          ),
+        ),
+      deleteTask: (taskId: number) => run(() => mutations.deleteTask(currentLaunch?.tasks ?? [], taskId)),
+      bulkAddTasks: (newTasks: mutations.BulkTaskInput[]) => run(() => mutations.bulkAddTasks(launchId, currentLaunch?.tasks ?? [], newTasks)),
+      markTaskComplete: (taskId: number) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.markTaskComplete(launchId, task, currentUser));
+      },
+      sendToCompliance: (taskId: number, assigneeId: string, assigneeName: string) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.sendToCompliance(launchId, task, assigneeId, assigneeName, currentUser));
+      },
+      acknowledgeComplianceReview: (taskId: number) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.acknowledgeComplianceReview(launchId, task, currentUser));
+      },
+      replyComplianceReview: (taskId: number, note: string) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.replyComplianceReview(launchId, task, note, currentUser));
+      },
+      flagComplianceReview: (taskId: number, reason: string, detail: string) => {
+        const task = findTask(taskId);
+        if (!task || !currentUser) return Promise.resolve();
+        return run(() => mutations.flagComplianceReview(launchId, task, reason, detail, currentUser));
+      },
 
-      addSubtask: (taskId: number, subtask: Subtask) => dispatch({ type: 'ADD_SUBTASK', launchId, taskId, subtask }),
-      changeSubtaskStatus: (taskId: number, subtaskId: number, status: SubtaskStatus) =>
-        dispatch({ type: 'CHANGE_SUBTASK_STATUS', launchId, taskId, subtaskId, status, actingUserName }),
-      holdSubtask: (taskId: number, subtaskId: number) => dispatch({ type: 'HOLD_SUBTASK', launchId, taskId, subtaskId, actingUserName }),
-      reassignSubtask: (taskId: number, subtaskId: number, newAssignee: string) =>
-        dispatch({ type: 'REASSIGN_SUBTASK', launchId, taskId, subtaskId, newAssignee, actingUserName }),
-      sendBackSubtask: (taskId: number, subtaskId: number, note: string) =>
-        dispatch({ type: 'SEND_BACK_SUBTASK', launchId, taskId, subtaskId, note, actingUserName }),
-      lockSubtask: (taskId: number, subtaskId: number) => dispatch({ type: 'LOCK_SUBTASK', launchId, taskId, subtaskId }),
-      recallSubtask: (taskId: number, subtaskId: number) => dispatch({ type: 'RECALL_SUBTASK', launchId, taskId, subtaskId }),
+      addSubtask: (taskId: number, subtask: mutations.NewSubtaskInput) => run(() => mutations.addSubtask(taskId, subtask)),
+      changeSubtaskStatus: (taskId: number, subtaskId: number, status: SubtaskStatus) => {
+        const task = findTask(taskId);
+        const subtask = findSubtask(taskId, subtaskId);
+        if (!task || !subtask || !currentUser) return Promise.resolve();
+        return run(() => mutations.changeSubtaskStatus(launchId, task, subtask, status, currentUser));
+      },
+      holdSubtask: (taskId: number, subtaskId: number) => {
+        const subtask = findSubtask(taskId, subtaskId);
+        if (!subtask || !currentUser) return Promise.resolve();
+        return run(() => mutations.holdSubtask(launchId, subtask, currentUser));
+      },
+      reassignSubtask: (taskId: number, subtaskId: number, newAssigneeId: string, newAssigneeName: string) => {
+        const subtask = findSubtask(taskId, subtaskId);
+        if (!subtask || !currentUser) return Promise.resolve();
+        return run(() => mutations.reassignSubtask(launchId, subtask, newAssigneeId, newAssigneeName, currentUser));
+      },
+      sendBackSubtask: (taskId: number, subtaskId: number, note: string) => {
+        const subtask = findSubtask(taskId, subtaskId);
+        if (!subtask || !currentUser) return Promise.resolve();
+        return run(() => mutations.sendBackSubtask(launchId, subtask, note, currentUser));
+      },
+      lockSubtask: (_taskId: number, subtaskId: number) => run(() => mutations.lockSubtask(subtaskId)),
+      recallSubtask: (_taskId: number, subtaskId: number) => run(() => mutations.recallSubtask(subtaskId)),
 
-      submitSubtaskFlag: (taskId: number, subtaskId: number, reason: string, detail: string) =>
-        dispatch({ type: 'SUBMIT_SUBTASK_FLAG', launchId, taskId, subtaskId, reason, detail, actingUserName }),
-      resolveSubtaskFlag: (taskId: number, subtaskId: number, note: string) => dispatch({ type: 'RESOLVE_SUBTASK_FLAG', launchId, taskId, subtaskId, note, actingUserName }),
+      submitSubtaskFlag: (taskId: number, subtaskId: number, reason: string, detail: string) => {
+        const subtask = findSubtask(taskId, subtaskId);
+        if (!subtask || !currentUser) return Promise.resolve();
+        return run(() => mutations.submitSubtaskFlag(launchId, subtask, reason, detail, currentUser));
+      },
+      resolveSubtaskFlag: (taskId: number, subtaskId: number, note: string) => {
+        const subtask = findSubtask(taskId, subtaskId);
+        if (!subtask || !currentUser) return Promise.resolve();
+        return run(() => mutations.resolveSubtaskFlag(launchId, subtask, note, currentUser));
+      },
 
-      resolveComplianceFlag: (flagId: number) => dispatch({ type: 'RESOLVE_COMPLIANCE_FLAG', launchId, flagId, actingUserName }),
+      resolveComplianceFlag: (flagId: number) => {
+        const flag = currentLaunch?.complianceFlags.find((f) => f.id === flagId);
+        if (!flag || !currentUser) return Promise.resolve();
+        return run(() => mutations.resolveComplianceFlag(launchId, flagId, flag.task, currentUser));
+      },
 
-      adjustVendorBooking: (vendorName: string, reasonLabel: string, extensionDays: number) =>
-        dispatch({ type: 'ADJUST_VENDOR_BOOKING', launchId, vendorName, reasonLabel, extensionDays, actingUserName }),
+      adjustVendorBooking: (vendorName: string, reasonLabel: string, extensionDays: number) => {
+        if (!currentUser) return Promise.resolve();
+        return run(() => mutations.adjustVendorBooking(launchId, vendorName, reasonLabel, extensionDays, currentUser));
+      },
 
-      updateRoster: (team: TeamMember[]) => dispatch({ type: 'UPDATE_ROSTER', launchId, team }),
+      updateRoster: (team: Parameters<typeof mutations.replaceRoster>[1]) => run(() => mutations.replaceRoster(launchId, team)),
 
-      setRetroTag: (milestone: string, tag: string) => dispatch({ type: 'SET_RETRO_TAG', launchId, milestone, tag }),
-      saveRetro: () => dispatch({ type: 'SAVE_RETRO', launchId }),
+      setRetroTag: (milestone: string, tag: string) => {
+        const nextTags = { ...(currentLaunch?.retroTags ?? {}), [milestone]: tag };
+        return run(() => mutations.setRetroTag(launchId, nextTags));
+      },
+      saveRetro: () => run(() => mutations.saveRetro(launchId)),
 
-      postStatusUpdate: (text: string) => dispatch({ type: 'POST_STATUS_UPDATE', launchId, text, actingUserName }),
+      postStatusUpdate: (text: string) => {
+        if (!currentUser || !currentLaunch) return Promise.resolve();
+        return run(() => mutations.postStatusUpdate(launchId, currentLaunch.name, text, currentUser));
+      },
     }),
-    [dispatch, launchId, actingUserName],
+    [run, launchId, findTask, findSubtask, currentUser, currentLaunch],
   );
 }

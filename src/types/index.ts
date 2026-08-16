@@ -4,8 +4,9 @@ export type AccessTier = 'owner' | 'member' | 'external';
 
 export type UserStatus = 'active' | 'revoked';
 
+/** A real account — mirrors a row in `profiles`, one per `auth.users` row. */
 export interface User {
-  id: number;
+  id: string;
   name: string;
   initial: string;
   email: string;
@@ -22,8 +23,12 @@ export type SubtaskStatus = 'open' | 'in_progress' | 'closed' | 'flagged';
 export interface Subtask {
   id: number;
   name: string;
-  assignee: string;
-  assignedBy?: string;
+  /** real account id — the authoritative owner for the edit gate */
+  assigneeId: string | null;
+  /** display name, resolved via the profiles join at fetch time */
+  assigneeName: string;
+  assignedById?: string | null;
+  assignedByName?: string;
   status: SubtaskStatus;
   flagReason?: string;
   flagDetail?: string;
@@ -40,7 +45,10 @@ export interface Task {
   id: number;
   step: number;
   name: string;
-  owner: string;
+  /** real account id — the authoritative owner for the edit gate */
+  ownerId: string | null;
+  /** display name, resolved via the profiles join at fetch time */
+  ownerName: string;
   status: TaskStatus;
   custom: boolean;
   blocks: boolean;
@@ -51,7 +59,8 @@ export interface Task {
   dependsOnTaskId: number | null;
   subtasks: Subtask[];
   reviewStatus: ReviewStatus;
-  reviewAssignee: string;
+  reviewAssigneeId: string | null;
+  reviewAssigneeName: string;
   reviewNote: string;
   /** stamped the first time status leaves 'not_started' */
   startedAt: number | null;
@@ -85,12 +94,15 @@ export interface ComplianceFlag {
 
 export interface TrailEntry {
   id: number;
+  actorId: string | null;
   initial: string;
   name: string;
   action: string;
   old: string;
   new: string;
   task: string;
+  createdAt: number;
+  /** formatted display label, derived from createdAt at fetch time */
   time: string;
 }
 
@@ -102,6 +114,7 @@ export interface Launch {
   closed: boolean;
   closedAt: number | null;
   createdAt: number;
+  createdBy: string | null;
   tasks: Task[];
   complianceFlags: ComplianceFlag[];
   trailEntries: TrailEntry[];
@@ -115,20 +128,6 @@ export interface Launch {
   bookingReasonLabel: string;
   bookingExtensionDays: number | null;
 }
-
-export const OWNER_ROLE: Record<string, Role> = {
-  Priya: 'launch_lead',
-  Rohan: 'compliance',
-  Ananya: 'upstream_ops',
-  Karan: 'marketing',
-};
-
-export const ROLE_OWNER: Record<string, string> = {
-  launch_lead: 'Priya',
-  compliance: 'Rohan',
-  upstream_ops: 'Ananya',
-  marketing: 'Karan',
-};
 
 export const ROLE_LABELS: Record<Role, string> = {
   launch_lead: 'NPD manager · launch lead',
@@ -154,5 +153,3 @@ export const GROUP_LABELS: Record<TeamGroup, string> = {
 export const ROOT_CAUSES = ['upstream dependency', 'vendor delay', 'resourcing', 'external vendor', 'scope change', 'other'];
 
 export const FLAG_REASONS = ['claim not substantiated', 'ingredient restricted', 'packaging claim mismatch', 'other'];
-
-export const OWNERS = ['Priya', 'Rohan', 'Ananya', 'Karan'];

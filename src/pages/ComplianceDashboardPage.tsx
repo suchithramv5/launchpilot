@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/state/AuthContext';
-import { useLaunch, useLaunchActions } from '@/state/LaunchDataContext';
+import { useLaunch, useLaunchActions, useLaunchRosterProfiles } from '@/state/LaunchDataContext';
 import { openComplianceFlagCount } from '@/lib/launchMetrics';
 import { complianceFlagBadgeStyle, taskBadgeStyle } from '@/lib/statusLabels';
 import { StatCard } from '@/components/StatCard';
@@ -18,14 +18,15 @@ export function ComplianceDashboardPage() {
   const launch = useLaunch(launchId);
   const { currentUser } = useAuth();
   const actions = useLaunchActions(launchId);
+  const ownerOptions = useLaunchRosterProfiles(launch);
 
   const [flagTaskId, setFlagTaskId] = useState<number | null>(null);
   const [flagSubtaskTarget, setFlagSubtaskTarget] = useState<{ taskId: number; subtaskId: number; name: string } | null>(null);
 
   const mySubtasks = useMemo(() => {
-    if (!launch) return [];
-    return launch.tasks.flatMap((t) => t.subtasks.filter((s) => s.assignee === 'Rohan').map((s) => ({ task: t, subtask: s })));
-  }, [launch]);
+    if (!launch || !currentUser) return [];
+    return launch.tasks.flatMap((t) => t.subtasks.filter((s) => s.assigneeId === currentUser.id).map((s) => ({ task: t, subtask: s })));
+  }, [launch, currentUser]);
 
   if (!launch || !currentUser) return null;
 
@@ -55,7 +56,7 @@ export function ComplianceDashboardPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="text-xl font-bold">{launch.name}</div>
-          <div className="text-[13px] text-ink-muted">Rohan&apos;s compliance dashboard</div>
+          <div className="text-[13px] text-ink-muted">{currentUser.name}&apos;s compliance dashboard</div>
         </div>
       </div>
 
@@ -99,7 +100,8 @@ export function ComplianceDashboardPage() {
             onChangeStatus={(status) => actions.changeSubtaskStatus(task.id, subtask.id, status)}
             onHold={() => actions.holdSubtask(task.id, subtask.id)}
             onFlag={() => setFlagSubtaskTarget({ taskId: task.id, subtaskId: subtask.id, name: subtask.name })}
-            onReassign={(newAssignee) => actions.reassignSubtask(task.id, subtask.id, newAssignee)}
+            onReassign={(newAssigneeId, newAssigneeName) => actions.reassignSubtask(task.id, subtask.id, newAssigneeId, newAssigneeName)}
+            reassignOptions={ownerOptions}
           />
         ))}
         {mySubtasks.length === 0 && <div className="px-4 py-3.5 text-[12.5px] text-ink-muted">No subtasks routed to you right now.</div>}

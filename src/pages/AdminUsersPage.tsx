@@ -3,34 +3,38 @@ import { useNavigate } from 'react-router-dom';
 import { useAppData } from '@/state/AppDataContext';
 import { useAdminActions } from '@/state/useAdminActions';
 import { useAuth } from '@/state/AuthContext';
-import type { AccessTier } from '@/types';
-import { TIER_LABELS } from '@/types';
+import type { AccessTier, Role } from '@/types';
+import { ROLE_LABELS } from '@/types';
 import { Avatar } from '@/components/Avatar';
 import { PrimaryButton, Select, SuccessBanner, TextInput } from '@/components/ui';
 
-const TIER_OPTIONS: AccessTier[] = ['owner', 'member', 'external'];
+const ROLE_OPTIONS: Role[] = ['launch_lead', 'compliance', 'upstream_ops', 'marketing', 'admin'];
+
+function tierForRole(role: Role): AccessTier {
+  return role === 'launch_lead' || role === 'admin' ? 'owner' : 'member';
+}
 
 export function AdminUsersPage() {
-  const { state } = useAppData();
-  const { addUser, revokeUser, restoreUser, updateUserTier } = useAdminActions();
+  const { profiles } = useAppData();
+  const { createPendingInvite, revokeUser, restoreUser, updateUserRole } = useAdminActions();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
-  const [tier, setTier] = useState<AccessTier>('member');
+  const [role, setRole] = useState<Role>('marketing');
   const [confirmation, setConfirmation] = useState('');
   const [search, setSearch] = useState('');
 
-  function grantAccess() {
+  async function grantAccess() {
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !/^\S+@\S+\.\S+$/.test(trimmed)) return;
-    addUser(trimmed, tier);
-    setConfirmation(`✉️ Signup email sent to ${trimmed} — they can now log in as a ${TIER_LABELS[tier]}.`);
+    if (!trimmed || !/^\S+@\S+\.\S+$/.test(trimmed) || !currentUser) return;
+    await createPendingInvite(trimmed, role, tierForRole(role), currentUser.id);
+    setConfirmation(`✓ ${trimmed} can now sign up and will land with the ${ROLE_LABELS[role]} role automatically.`);
     setEmail('');
   }
 
   const query = search.trim().toLowerCase();
-  const filteredUsers = state.users.filter(
+  const filteredUsers = profiles.filter(
     (u) => !query || u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query) || u.employeeId.toLowerCase().includes(query),
   );
 
@@ -43,13 +47,14 @@ export function AdminUsersPage() {
 
       {confirmation && <SuccessBanner>{confirmation}</SuccessBanner>}
 
-      <div className="mb-2.5 text-[13px] font-bold">Add access for a new user</div>
+      <div className="mb-2.5 text-[13px] font-bold">Grant access for a new user</div>
+      <div className="mb-2 text-[12px] text-ink-muted">They still create their own account (and password) — this just pre-assigns their role.</div>
       <div className="mb-7 flex flex-wrap gap-2">
         <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@brand.com" className="flex-[1.6]" />
-        <Select value={tier} onChange={(e) => setTier(e.target.value as AccessTier)} className="flex-1">
-          {TIER_OPTIONS.map((t) => (
-            <option key={t} value={t}>
-              {TIER_LABELS[t]}
+        <Select value={role} onChange={(e) => setRole(e.target.value as Role)} className="flex-1">
+          {ROLE_OPTIONS.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
             </option>
           ))}
         </Select>
@@ -63,7 +68,6 @@ export function AdminUsersPage() {
 
       <div className="overflow-hidden rounded-card border border-border bg-card shadow-card">
         {filteredUsers.map((u) => {
-          const isAdminRole = u.role === 'admin';
           const isRevoked = u.status === 'revoked';
           const isSelf = u.id === currentUser?.id;
           return (
@@ -75,12 +79,13 @@ export function AdminUsersPage() {
                   {u.email} · {u.employeeId}
                 </div>
               </div>
-              {isAdminRole && <div className="rounded-full bg-[#f3f1ec] px-2.5 py-1 text-xs font-bold text-ink-secondary">Admin</div>}
-              {!isAdminRole && !isSelf && (
-                <Select value={u.accessTier} onChange={(e) => updateUserTier(u.id, e.target.value as AccessTier)} className="w-[150px] py-1.5 text-[13px]">
-                  {TIER_OPTIONS.map((t) => (
-                    <option key={t} value={t}>
-                      {TIER_LABELS[t]}
+              {isSelf ? (
+                <div className="rounded-full bg-[#f3f1ec] px-2.5 py-1 text-xs font-bold text-ink-secondary">You</div>
+              ) : (
+                <Select value={u.role} onChange={(e) => updateUserRole(u.id, e.target.value as Role)} className="w-[190px] py-1.5 text-[13px]">
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]}
                     </option>
                   ))}
                 </Select>
@@ -91,11 +96,9 @@ export function AdminUsersPage() {
                     Restore access
                   </button>
                 ) : (
-                  !isAdminRole && (
-                    <button onClick={() => revokeUser(u.id)} className="whitespace-nowrap rounded-control border border-border-input px-3 py-1.5 text-xs font-semibold">
-                      Revoke access
-                    </button>
-                  )
+                  <button onClick={() => revokeUser(u.id)} className="whitespace-nowrap rounded-control border border-border-input px-3 py-1.5 text-xs font-semibold">
+                    Revoke access
+                  </button>
                 ))}
             </div>
           );

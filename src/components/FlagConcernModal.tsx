@@ -24,7 +24,7 @@ export function FlagConcernModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35">
       <div className="w-[440px] rounded-modal border border-border bg-white p-6 shadow-modal">
         <div className="mb-1 text-[17px] font-bold">Flag a concern</div>
-        <div className="mb-5 text-[13px] text-ink-tertiary">{itemName} — routes back to the task owner, cc&apos;d to Priya.</div>
+        <div className="mb-5 text-[13px] text-ink-tertiary">{itemName} — routes back to the task owner and is visible to the launch lead.</div>
 
         <div className="mb-1.5 text-xs font-semibold text-ink-secondary">Reason category</div>
         <Select value={reason} onChange={(e) => setReason(e.target.value)} className="mb-4 w-full">

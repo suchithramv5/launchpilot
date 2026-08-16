@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/state/AuthContext';
 import { useLaunch } from '@/state/LaunchDataContext';
 import { isLaunchOwnerUser, scopedTrailEntries } from '@/lib/permissions';
-import { ROLE_OWNER } from '@/types';
 import { Select } from '@/components/ui';
 
 export function TrailPage() {
@@ -19,7 +18,6 @@ export function TrailPage() {
   const filtered = filter === 'All tasks' ? scoped : scoped.filter((e) => e.task === filter);
   const isOwner = isLaunchOwnerUser(currentUser);
   const taskNames = Array.from(new Set(launch.tasks.map((t) => t.name)));
-  const ownerName = ROLE_OWNER[currentUser.role];
 
   return (
     <div className="mx-auto w-full max-w-[780px] p-8">
@@ -40,7 +38,7 @@ export function TrailPage() {
       <div className="mb-2 text-[13px] text-ink-muted">Every commitment change on this launch, in order. Entries are system-recorded and can&apos;t be edited or deleted.</div>
       {!isOwner && (
         <div className="mb-4 inline-block rounded-control bg-[#f3f1ec] px-3 py-2 text-xs text-ink-secondary">
-          🔒 Showing entries for {ownerName ?? 'your'}&apos;s tasks only.
+          🔒 Showing entries for your own tasks only.
         </div>
       )}
 

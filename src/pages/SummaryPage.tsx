@@ -44,7 +44,7 @@ export function SummaryPage() {
             <div key={t.id} className="flex items-center gap-3 border-b border-border-divider px-4 py-3.5 last:border-b-0">
               <div className="w-[22px] text-xs text-ink-faint">{t.step}</div>
               <div className="flex-1 text-sm font-semibold">{t.name}</div>
-              <div className="w-[90px] text-xs text-ink-tertiary">{t.owner}</div>
+              <div className="w-[90px] text-xs text-ink-tertiary">{t.ownerName}</div>
               <Badge style={taskBadgeStyle(t.status)} />
               <TaskTimingBadges task={t} launch={launch} />
             </div>
