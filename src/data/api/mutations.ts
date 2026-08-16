@@ -399,7 +399,21 @@ export async function inviteUser(email: string, role: Role, accessTier: AccessTi
   const { data, error } = await supabase.functions.invoke('invite-user', {
     body: { email: email.toLowerCase(), role, accessTier, redirectTo },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // supabase-js's generic "non-2xx status code" message hides the actual
+    // reason the function returned — it's only available by reading the
+    // raw response body off the error's context.
+    let message = error.message;
+    if ('context' in error && error.context instanceof Response) {
+      try {
+        const body = await error.context.clone().json();
+        if (body?.error) message = body.error;
+      } catch {
+        // body wasn't JSON — fall back to the generic message
+      }
+    }
+    throw new Error(message);
+  }
   if (data?.error) throw new Error(data.error);
 }
 
