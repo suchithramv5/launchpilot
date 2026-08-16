@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Task, TeamMember } from '@/types';
 import { DEFAULT_CHECKLIST_TEMPLATE } from '@/data/checklistTemplate';
 import { createLaunchWithTasksAndTeam, type DraftTaskInput } from '@/data/api/mutations';
@@ -54,12 +54,19 @@ const CreateLaunchContext = createContext<CreateLaunchContextValue | null>(null)
 export function CreateLaunchProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
   const { refetchLaunches } = useAppData();
-  const [draft, setDraft] = useState<DraftState>(() => ({
-    name: '',
-    description: '',
-    tasks: currentUser ? buildDefaultTasks(currentUser.id, currentUser.name) : [],
-    team: [],
-  }));
+  const [draft, setDraft] = useState<DraftState>({ name: '', description: '', tasks: [], team: [] });
+
+  // currentUser can still be loading (profiles fetch in flight) the instant this
+  // provider mounts, so seed the default checklist reactively rather than only
+  // at the useState initializer — but only once, so it never overwrites the
+  // user's own edits if they clear the checklist down to zero tasks later.
+  const seededDefaultTasks = useRef(false);
+  useEffect(() => {
+    if (currentUser && !seededDefaultTasks.current) {
+      seededDefaultTasks.current = true;
+      setDraft((d) => (d.tasks.length === 0 ? { ...d, tasks: buildDefaultTasks(currentUser.id, currentUser.name) } : d));
+    }
+  }, [currentUser]);
 
   const renumber = (tasks: Task[]): Task[] => tasks.map((t, i) => ({ ...t, step: i + 1 }));
 
