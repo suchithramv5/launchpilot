@@ -15,10 +15,7 @@ export function useAdminActions() {
   );
 
   return {
-    createPendingInvite: useCallback(
-      (email: string, role: Role, accessTier: AccessTier, invitedBy: string) => run(() => mutations.createPendingInvite(email, role, accessTier, invitedBy)),
-      [run],
-    ),
+    inviteUser: useCallback((email: string, role: Role, accessTier: AccessTier) => run(() => mutations.inviteUser(email, role, accessTier)), [run]),
     revokeUser: useCallback((userId: string) => run(() => mutations.revokeUser(userId)), [run]),
     restoreUser: useCallback((userId: string) => run(() => mutations.restoreUser(userId)), [run]),
     updateUserRole: useCallback((userId: string, role: Role) => run(() => mutations.updateUserRole(userId, role)), [run]),

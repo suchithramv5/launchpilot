@@ -393,9 +393,19 @@ export async function createLaunchWithTasksAndTeam(
 
 // ---- admin ----
 
-export async function createPendingInvite(email: string, role: Role, accessTier: AccessTier, invitedBy: string): Promise<void> {
-  const { error } = await supabase.from('pending_invites').upsert({ email: email.toLowerCase(), role, access_tier: accessTier, invited_by: invitedBy });
-  rethrow('createPendingInvite', error);
+/** Creates the invited user's account immediately and emails them a sign-in link (no plaintext password ever exists). */
+export async function inviteUser(email: string, role: Role, accessTier: AccessTier): Promise<void> {
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}update-password`;
+  const { data, error } = await supabase.functions.invoke('invite-user', {
+    body: { email: email.toLowerCase(), role, accessTier, redirectTo },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+}
+
+export async function clearMustChangePassword(): Promise<void> {
+  const { error } = await supabase.rpc('clear_must_change_password');
+  rethrow('clearMustChangePassword', error);
 }
 
 export async function revokeUser(userId: string): Promise<void> {

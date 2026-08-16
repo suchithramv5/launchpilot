@@ -14,6 +14,8 @@ export interface User {
   accessTier: AccessTier;
   employeeId: string;
   status: UserStatus;
+  /** true for admin-invited accounts that haven't set their own password yet */
+  mustChangePassword: boolean;
 }
 
 export type TaskStatus = 'not_started' | 'on track' | 'at risk' | 'blocked' | 'completed';

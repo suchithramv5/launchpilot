@@ -4,8 +4,9 @@ import { useAuth } from '@/state/AuthContext';
 import { PrimaryButton, TextInput } from '@/components/ui';
 
 export function UpdatePasswordPage() {
-  const { hasSession, passwordRecovery, updatePassword, logout } = useAuth();
+  const { hasSession, passwordRecovery, currentUser, updatePassword, logout } = useAuth();
   const navigate = useNavigate();
+  const forcedChange = !!currentUser?.mustChangePassword;
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -29,6 +30,17 @@ export function UpdatePasswordPage() {
   }
 
   if (done) {
+    if (forcedChange) {
+      return (
+        <div className="mx-auto my-16 max-w-[460px] rounded-modal border border-border bg-white p-10 shadow-[0_4px_16px_rgba(32,29,25,0.06)]">
+          <div className="mb-1 text-xl font-bold">Password set</div>
+          <div className="mb-5 text-[13px] text-ink-tertiary">You&apos;re all set — continuing to LaunchPilot.</div>
+          <PrimaryButton onClick={() => navigate('/launches')} className="w-full">
+            Continue
+          </PrimaryButton>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto my-16 max-w-[460px] rounded-modal border border-border bg-white p-10 shadow-[0_4px_16px_rgba(32,29,25,0.06)]">
         <div className="mb-1 text-xl font-bold">Password updated</div>
@@ -46,12 +58,12 @@ export function UpdatePasswordPage() {
     );
   }
 
-  if (!hasSession || !passwordRecovery) {
+  if (!hasSession || (!passwordRecovery && !forcedChange)) {
     return (
       <div className="mx-auto my-16 max-w-[460px] rounded-modal border border-border bg-white p-10 shadow-[0_4px_16px_rgba(32,29,25,0.06)]">
         <div className="mb-1 text-xl font-bold">Reset link not found</div>
         <div className="mb-5 text-[13px] text-ink-tertiary">
-          This page only works when you arrive here from a password-reset email link. Request a new one from the login screen.
+          This page only works when you arrive here from a password-reset or invite email link. Request a new one from the login screen.
         </div>
         <PrimaryButton onClick={() => navigate('/reset-password')} className="w-full">
           Request a reset link
@@ -62,8 +74,10 @@ export function UpdatePasswordPage() {
 
   return (
     <div className="mx-auto my-16 max-w-[460px] rounded-modal border border-border bg-white p-10 shadow-[0_4px_16px_rgba(32,29,25,0.06)]">
-      <div className="mb-1 text-xl font-bold">Set a new password</div>
-      <div className="mb-5 text-[13px] text-ink-tertiary">Choose a new password for your account.</div>
+      <div className="mb-1 text-xl font-bold">{forcedChange ? 'Set your password' : 'Set a new password'}</div>
+      <div className="mb-5 text-[13px] text-ink-tertiary">
+        {forcedChange ? 'Welcome to LaunchPilot — choose a password to finish setting up your account.' : 'Choose a new password for your account.'}
+      </div>
 
       <div className="mb-1.5 text-xs font-semibold text-ink-secondary">New password</div>
       <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="mb-3.5" />

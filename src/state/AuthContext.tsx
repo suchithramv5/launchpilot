@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import * as mutations from '@/data/api/mutations';
 import { useAppData } from './AppDataContext';
 
 export interface AuthResult {
@@ -52,10 +53,12 @@ export function useAuth() {
       if (newPassword.length < 8) return { ok: false, error: 'Password must be at least 8 characters.' };
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) return { ok: false, error: error.message };
+      await mutations.clearMustChangePassword().catch(() => {});
       clearPasswordRecovery();
+      await refetchProfiles();
       return { ok: true };
     },
-    [clearPasswordRecovery],
+    [clearPasswordRecovery, refetchProfiles],
   );
 
   const logout = useCallback(async () => {

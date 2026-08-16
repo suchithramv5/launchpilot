@@ -6,7 +6,7 @@ import { useAuth } from '@/state/AuthContext';
 import type { AccessTier, Role } from '@/types';
 import { ROLE_LABELS } from '@/types';
 import { Avatar } from '@/components/Avatar';
-import { PrimaryButton, Select, SuccessBanner, TextInput } from '@/components/ui';
+import { ErrorText, PrimaryButton, Select, SuccessBanner, TextInput } from '@/components/ui';
 
 const ROLE_OPTIONS: Role[] = ['launch_lead', 'compliance', 'upstream_ops', 'marketing', 'admin'];
 
@@ -16,21 +16,32 @@ function tierForRole(role: Role): AccessTier {
 
 export function AdminUsersPage() {
   const { profiles } = useAppData();
-  const { createPendingInvite, revokeUser, restoreUser, updateUserRole } = useAdminActions();
+  const { inviteUser, revokeUser, restoreUser, updateUserRole } = useAdminActions();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('marketing');
   const [confirmation, setConfirmation] = useState('');
+  const [error, setError] = useState('');
+  const [inviting, setInviting] = useState(false);
   const [search, setSearch] = useState('');
 
   async function grantAccess() {
     const trimmed = email.trim().toLowerCase();
     if (!trimmed || !/^\S+@\S+\.\S+$/.test(trimmed) || !currentUser) return;
-    await createPendingInvite(trimmed, role, tierForRole(role), currentUser.id);
-    setConfirmation(`✓ ${trimmed} can now sign up and will land with the ${ROLE_LABELS[role]} role automatically.`);
-    setEmail('');
+    setError('');
+    setConfirmation('');
+    setInviting(true);
+    try {
+      await inviteUser(trimmed, role, tierForRole(role));
+      setConfirmation(`✓ Invited ${trimmed} — they'll get an email to set their password and sign in with the ${ROLE_LABELS[role]} role.`);
+      setEmail('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong sending that invite.');
+    } finally {
+      setInviting(false);
+    }
   }
 
   const query = search.trim().toLowerCase();
@@ -46,9 +57,10 @@ export function AdminUsersPage() {
       <div className="mb-6 text-xl font-bold">Manage user roles</div>
 
       {confirmation && <SuccessBanner>{confirmation}</SuccessBanner>}
+      {error && <ErrorText>{error}</ErrorText>}
 
       <div className="mb-2.5 text-[13px] font-bold">Grant access for a new user</div>
-      <div className="mb-2 text-[12px] text-ink-muted">They still create their own account (and password) — this just pre-assigns their role.</div>
+      <div className="mb-2 text-[12px] text-ink-muted">They'll get an emailed invite link to set a password — no account or password to share yourself.</div>
       <div className="mb-7 flex flex-wrap gap-2">
         <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@brand.com" className="flex-[1.6]" />
         <Select value={role} onChange={(e) => setRole(e.target.value as Role)} className="flex-1">
@@ -58,8 +70,8 @@ export function AdminUsersPage() {
             </option>
           ))}
         </Select>
-        <PrimaryButton onClick={grantAccess} className="whitespace-nowrap">
-          Grant access
+        <PrimaryButton onClick={grantAccess} disabled={inviting} className="whitespace-nowrap">
+          {inviting ? 'Sending…' : 'Grant access'}
         </PrimaryButton>
       </div>
 

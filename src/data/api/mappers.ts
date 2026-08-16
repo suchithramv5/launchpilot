@@ -25,6 +25,7 @@ export interface ProfileRow {
   access_tier: User['accessTier'];
   employee_id: string;
   status: User['status'];
+  must_change_password: boolean;
 }
 
 export interface TaskRow {
@@ -126,6 +127,7 @@ export function mapProfileRow(row: ProfileRow): User {
     accessTier: row.access_tier,
     employeeId: row.employee_id,
     status: row.status,
+    mustChangePassword: row.must_change_password,
   };
 }
 
