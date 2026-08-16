@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Task, User } from '@/types';
 import { checklistParseError, parseChecklistFile, type ParsedTask } from '@/lib/parseChecklistFile';
 import { PrimaryButton, Select, TextInput } from '@/components/ui';
@@ -221,6 +221,9 @@ function ChecklistTaskRow({
 }) {
   const [name, setName] = useState(task.name);
   const [duration, setDuration] = useState(task.durationDays);
+
+  useEffect(() => setName(task.name), [task.id, task.name]);
+  useEffect(() => setDuration(task.durationDays), [task.id, task.durationDays]);
 
   return (
     <div className="flex items-center gap-3 border-b border-border-divider px-4 py-3.5 last:border-b-0">
